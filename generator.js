@@ -2,24 +2,21 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import * as turf from "@turf/turf";
 
-// --- КОНФИГУРАЦИЯ СТИЛЕЙ И ОПЦИЙ ---
 const CONFIG = {
-  title: "MeteoAlarm Europe & Ukraine Warnings",
+  title: "MeteoAlarm Europe Warnings",
   refreshMinutes: 2,
-  drawOutlines: true, // Рисовать тонкий полупрозрачный контур вокруг полигона
+  drawOutlines: true,
 
-  // Цветовые схемы RGBA (Red Green Blue Alpha [0-255])
   colors: {
-    Extreme:  { fill: "255 0 0 18",    line: "255 50 50 45" },   // Красный
-    Severe:   { fill: "255 130 0 16",  line: "255 160 0 45" },  // Оранжевый
-    Moderate: { fill: "235 215 0 14",  line: "200 190 0 40" },  // Желтый
-    Minor:    { fill: "0 170 230 12",  line: "0 130 200 35" }   // Голубой
+    Extreme:  { fill: "255 0 0 20",    line: "255 50 50 50" },   // Красный
+    Severe:   { fill: "255 130 0 18",  line: "255 160 0 50" },  // Оранжевый
+    Moderate: { fill: "235 215 0 16",  line: "200 190 0 45" },  // Желтый
+    Minor:    { fill: "0 170 230 14",  line: "0 130 200 40" }   // Голубой
   },
 
   simplifyTolerance: 0.001
 };
 
-// 39 Фидов MeteoAlarm для всей Европы
 const METEOALARM_FEEDS = [
   "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-andorra",
   "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-austria",
@@ -62,75 +59,62 @@ const METEOALARM_FEEDS = [
   "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-united-kingdom"
 ];
 
-// Европейские геобазы (Евросоюз NUTS2/3 + Не-ЕС регионы ADM1)
+// Оптимизированные геобазы ЕС NUTS + geoBoundaries + Natural Earth Admin-1
 const EUROPE_BOUNDARY_SOURCES = [
-  "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_20M_2021_4326_LEVL_3.geojson",
-  "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_20M_2021_4326_LEVL_2.geojson",
+  "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_60M_2021_4326_LEVL_3.geojson",
+  "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_60M_2021_4326_LEVL_2.geojson",
   "https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/UKR/ADM1/geoBoundaries-UKR-ADM1.geojson",
   "https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/MDA/ADM1/geoBoundaries-MDA-ADM1.geojson"
 ];
 
-// Словарь альянсов и транслитераций для нелатинских регионов
 const REGION_ALIASES = {
-  "черкаська": "cherkasy", "cherkasy": "cherkasy",
-  "чернігівська": "chernihiv", "chernihiv": "chernihiv",
-  "чернівецька": "chernivtsi", "chernivtsi": "chernivtsi",
-  "дніпропетровська": "dnipropetrovsk", "dnipropetrovsk": "dnipropetrovsk",
-  "донецька": "donetsk", "donetsk": "donetsk",
-  "івано-франківська": "ivano-frankivsk", "ivanofrankivsk": "ivano-frankivsk",
-  "харківська": "kharkiv", "kharkiv": "kharkiv",
-  "херсонська": "kherson", "kherson": "kherson",
-  "хмельницька": "khmelnytskyi", "khmelnytskyi": "khmelnytskyi",
-  "кіровоградська": "kirovohrad", "kirovohrad": "kirovohrad",
-  "київська": "kyiv", "kyiv": "kyiv", "kiev": "kyiv",
-  "луганська": "luhansk", "luhansk": "luhansk",
-  "львівська": "lviv", "lviv": "lviv",
-  "миколаївська": "mykolaiv", "mykolaiv": "mykolaiv",
-  "одеська": "odesa", "odesa": "odesa",
-  "полтавська": "poltava", "poltava": "poltava",
-  "рівненська": "rivne", "rivne": "rivne",
-  "сумська": "sumy", "sumy": "sumy",
-  "тернопільська": "ternopil", "ternopil": "ternopil",
-  "вінницька": "vinnytsia", "vinnytsia": "vinnytsia",
-  "волинська": "volyn", "volyn": "volyn",
-  "закарпатська": "zakarpattia", "zakarpattia": "zakarpattia",
-  "запорізька": "zaporizhzhia", "zaporizhzhia": "zaporizhzhia",
-  "житомирська": "zhytomyr", "zhytomyr": "zhytomyr",
-  "крим": "crimea", "crimea": "crimea", "sevastopol": "sevastopol"
+  "черкаська": "cherkasy", "чернігівська": "chernihiv", "чернівецька": "chernivtsi",
+  "дніпропетровська": "dnipropetrovsk", "донецька": "donetsk", "івано-франківська": "ivano-frankivsk",
+  "харківська": "kharkiv", "херсонська": "kherson", "хмельницька": "khmelnytskyi",
+  "кіровоградська": "kirovohrad", "київська": "kyiv", "луганська": "luhansk",
+  "львівська": "lviv", "миколаївська": "mykolaiv", "одеська": "odesa",
+  "полтавська": "poltava", "рівненська": "rivne", "сумська": "sumy",
+  "тернопільська": "ternopil", "вінницька": "vinnytsia", "волинська": "volyn",
+  "закарпатська": "zakarpattia", "запорізька": "zaporizhzhia", "житомирська": "zhytomyr",
+  "крим": "crimea", "севастополь": "sevastopol"
 };
 
 async function main() {
   console.log("Starting All-Europe MeteoAlarm Placefile Generation...");
   
   const warnings = await fetchAllFeeds();
-  console.log(`Fetched ${warnings.length} total active warning records.`);
+  console.log(`Fetched ${warnings.length} active warnings across Europe.`);
 
-  // Загружаем границы регионов для сопоставления предупреждений без встроенных полигонов
   const boundaryMap = await fetchEuropeanBoundaries();
+  console.log(`Loaded ${boundaryMap.size} boundary mappings.`);
 
-  const groups = {
-    Extreme: [],
-    Severe: [],
-    Moderate: [],
-    Minor: []
-  };
+  const groups = { Extreme: [], Severe: [], Moderate: [], Minor: [] };
+  let totalPolygonsMapped = 0;
 
   for (const w of warnings) {
     const sev = groups[w.severity] ? w.severity : "Moderate";
     let polygonsToRender = [];
 
-    // 1. Если фид отдал полигон напрямую
-    if (w.polygon && w.polygon.length >= 3) {
-      polygonsToRender.push(w.polygon);
+    // 1. Координаты напрямую из CAP
+    if (w.polygons && w.polygons.length > 0) {
+      polygonsToRender.push(...w.polygons);
     } 
-    // 2. Иначе ищем границы региона в загруженных GeoJSON базах Европы
-    else if (w.areaDesc) {
-      const regions = w.areaDesc.split(/[,;\n]+/).map(r => r.trim()).filter(Boolean);
+    // 2. Поиск по NUTS / EMMA геолокационным кодам
+    if (polygonsToRender.length === 0 && w.geocodes.length > 0) {
+      for (const code of w.geocodes) {
+        const normCode = normalizeName(code);
+        if (boundaryMap.has(normCode)) {
+          polygonsToRender.push(...boundaryMap.get(normCode));
+        }
+      }
+    }
+    // 3. Поиск по названиям регионов (areaDesc)
+    if (polygonsToRender.length === 0 && w.areaDesc) {
+      const regions = w.areaDesc.split(/[,;\n/]+/).map(r => r.trim()).filter(Boolean);
       for (const reg of regions) {
         const norm = normalizeName(reg);
-        if (norm.length >= 3 && boundaryMap.has(norm)) {
-          const boundaryPolys = boundaryMap.get(norm);
-          polygonsToRender.push(...boundaryPolys);
+        if (norm.length >= 2 && boundaryMap.has(norm)) {
+          polygonsToRender.push(...boundaryMap.get(norm));
         }
       }
     }
@@ -139,15 +123,17 @@ async function main() {
       try {
         const polyFeature = turf.polygon([polyCoords], {
           title: w.title,
-          areaDesc: w.areaDesc,
           severity: sev
         });
         groups[sev].push(polyFeature);
+        totalPolygonsMapped++;
       } catch {
-        // Пропускаем некорректные кольца координат
+        // Игнорируем некорректные геометрические контуры
       }
     }
   }
+
+  console.log(`Successfully mapped ${totalPolygonsMapped} warning polygons.`);
 
   const outputLines = [
     `Title: ${CONFIG.title}`,
@@ -158,7 +144,6 @@ async function main() {
   for (const [severity, features] of Object.entries(groups)) {
     if (features.length === 0) continue;
 
-    console.log(`Processing ${features.length} polygons for severity: ${severity}`);
     const mergedFeatures = mergeAndSimplify(features);
     const colorSpec = CONFIG.colors[severity] || CONFIG.colors.Moderate;
 
@@ -201,36 +186,27 @@ async function main() {
   console.log(`Placefile generated successfully at ${outputPath}`);
 }
 
-/**
- * Нормализация строк с поддержкой европейских языков и кириллицы
- */
 function normalizeName(str) {
   if (!str) return "";
   const cleanStr = str.toLowerCase().trim();
 
   for (const [key, alias] of Object.entries(REGION_ALIASES)) {
-    if (cleanStr.includes(key)) {
-      return alias;
-    }
+    if (cleanStr.includes(key)) return alias;
   }
 
   return cleanStr
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // Удаление умлаутов/акцентов
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "")
     .trim();
 }
 
-/**
- * Загрузка векторных границ для всей Европы из GISCO / NUTS / geoBoundaries
- */
 async function fetchEuropeanBoundaries() {
   const boundaryMap = new Map();
 
   for (const url of EUROPE_BOUNDARY_SOURCES) {
     try {
-      console.log(`Fetching boundary dataset: ${url.substring(url.lastIndexOf('/') + 1)}`);
-      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
       if (!res.ok) continue;
 
       const geojson = await res.json();
@@ -238,12 +214,6 @@ async function fetchEuropeanBoundaries() {
 
       for (const feat of geojson.features) {
         const props = feat.properties || {};
-        const rawName = props.NUTS_NAME || props.NUTS_ID || props.shapeName || props.NAME_LATN || props.NAME || props.id;
-        if (!rawName) continue;
-
-        const norm = normalizeName(rawName);
-        if (norm.length < 3) continue;
-
         const geom = feat.geometry;
         if (!geom) continue;
 
@@ -255,25 +225,37 @@ async function fetchEuropeanBoundaries() {
             polygons.push(poly[0]);
           }
         }
+        if (polygons.length === 0) continue;
 
-        if (polygons.length > 0) {
-          if (!boundaryMap.has(norm)) {
-            boundaryMap.set(norm, []);
+        // Сохраняем векторные контуры под всеми возможными ключами (NUTS ID, Имя региона, Коды)
+        const keys = [
+          props.NUTS_ID,
+          props.NUTS_NAME,
+          props.shapeName,
+          props.shapeID,
+          props.NAME_LATN,
+          props.NAME,
+          props.id
+        ].filter(Boolean);
+
+        for (const k of keys) {
+          const normKey = normalizeName(k);
+          if (normKey.length >= 2) {
+            if (!boundaryMap.has(normKey)) {
+              boundaryMap.set(normKey, []);
+            }
+            boundaryMap.get(normKey).push(...polygons);
           }
-          boundaryMap.get(norm).push(...polygons);
         }
       }
     } catch (e) {
-      console.warn(`Failed to fetch boundary dataset ${url}:`, e.message);
+      console.warn(`Failed to fetch boundary set ${url}:`, e.message);
     }
   }
 
   return boundaryMap;
 }
 
-/**
- * Объединение пространственных полигонов через Turf.js
- */
 function mergeAndSimplify(features) {
   if (features.length === 1) {
     return [turf.simplify(features[0], { tolerance: CONFIG.simplifyTolerance, highQuality: true })];
@@ -288,7 +270,7 @@ function mergeAndSimplify(features) {
         try {
           unionResult = turf.union(turf.featureCollection([unionResult, feat]));
         } catch {
-          // Игнорируем ошибки пространственной стыковки для поврежденных ребер
+          // Игнорируем гео-стыковки при поврежденных вершинах
         }
       }
     }
@@ -308,9 +290,6 @@ function mergeAndSimplify(features) {
   }
 }
 
-/**
- * Загрузка 39 RSS/Atom-фидов MeteoAlarm
- */
 async function fetchAllFeeds() {
   const promises = METEOALARM_FEEDS.map(async (url) => {
     try {
@@ -347,14 +326,24 @@ function parseAtomFeed(xml) {
     if (entryEnd === -1) break;
 
     const entry = xml.substring(entryStart, entryEnd);
-    const polygonStr = extractTag(entry, "cap:polygon");
     const severity = extractTag(entry, "cap:severity") || "Moderate";
     const title = extractTag(entry, "title") || "Weather Warning";
     const areaDesc = extractTag(entry, "cap:areaDesc") || "";
 
-    let polygon = null;
-    if (polygonStr) {
-      const rawPoints = polygonStr.trim().split(/\s+/);
+    // Извлечение geocode (NUTS/EMMA ID)
+    const geocodes = [];
+    let geocodeMatch;
+    const geocodeRegex = /<cap:geocode>[\s\S]*?<cap:value>([\s\S]*?)<\/cap:value>[\s\S]*?<\/cap:geocode>/g;
+    while ((geocodeMatch = geocodeRegex.exec(entry)) !== null) {
+      if (geocodeMatch[1]) geocodes.push(geocodeMatch[1].trim());
+    }
+
+    // Извлечение полигонов coordinates (lat,lon)
+    const polygons = [];
+    let polyMatch;
+    const polyRegex = /<cap:polygon>([\s\S]*?)<\/cap:polygon>/g;
+    while ((polyMatch = polyRegex.exec(entry)) !== null) {
+      const rawPoints = polyMatch[1].trim().split(/\s+/);
       const points = [];
 
       for (let i = 0; i < rawPoints.length; i++) {
@@ -374,11 +363,11 @@ function parseAtomFeed(xml) {
         if (first[0] !== last[0] || first[1] !== last[1]) {
           points.push([first[0], first[1]]);
         }
-        polygon = points;
+        polygons.push(points);
       }
     }
 
-    warnings.push({ severity, title, areaDesc, polygon });
+    warnings.push({ severity, title, areaDesc, geocodes, polygons });
     entryStart = xml.indexOf("<entry>", entryEnd);
   }
 
