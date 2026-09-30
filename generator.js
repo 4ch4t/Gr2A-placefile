@@ -5,16 +5,14 @@ const CONFIG = {
   title: "MeteoAlarm Europe Warnings",
   refreshMinutes: 2,
   
-  // Цвета для GRLevelX (RGBA, alpha 0-255)
   colors: {
-    Extreme:  { fill: "255 0 0 40",    line: "255 0 0 255" },     // Красный
-    Severe:   { fill: "255 140 0 35",  line: "255 140 0 255" },   // Оранжевый
-    Moderate: { fill: "240 210 0 30",  line: "210 180 0 255" },   // Желтый
-    Minor:    { fill: "0 170 230 25",  line: "0 130 200 255" }    // Голубой
+    Extreme:  { fill: "255 0 0 40",    line: "255 0 0 255" },
+    Severe:   { fill: "255 140 0 35",  line: "255 140 0 255" },
+    Moderate: { fill: "240 210 0 30",  line: "210 180 0 255" },
+    Minor:    { fill: "0 170 230 25",  line: "0 130 200 255" }
   }
 };
 
-// Все 39 стран MeteoAlarm
 const FEEDS = [
   "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-andorra",
   "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-austria",
@@ -77,7 +75,6 @@ async function main() {
     for (const poly of w.polygons) {
       if (!poly || poly.length < 3) continue;
 
-      // Заливка
       outputLines.push(`Color: ${colorSpec.fill}`);
       outputLines.push(`Polygon:`);
       for (const [lat, lon] of poly) {
@@ -85,7 +82,6 @@ async function main() {
       }
       outputLines.push("End:");
 
-      // Контур
       outputLines.push(`Color: ${colorSpec.line}`);
       outputLines.push(`Line: 1, 0, "${w.title.replace(/"/g, "'")}"`);
       for (const [lat, lon] of poly) {
@@ -165,7 +161,6 @@ function parseFeed(xml) {
       }
 
       if (points.length >= 3) {
-        // Замыкаем кольцо если надо
         const first = points[0];
         const last = points[points.length - 1];
         if (first[0] !== last[0] || first[1] !== last[1]) {
