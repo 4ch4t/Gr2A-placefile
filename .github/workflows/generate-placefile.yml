@@ -2,9 +2,8 @@ name: Generate and Deploy MeteoAlarm Placefile
 
 on:
   schedule:
-    # Запуск каждые 5 минут
-    - cron: '*/5 * * * *'
-  workflow_dispatch: # Возможность ручного запуска из интерфейса GitHub
+    - cron: '*/0.5 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,9 +28,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install Dependencies
-        run: npm install
 
       - name: Build Placefile
         run: node generator.js
